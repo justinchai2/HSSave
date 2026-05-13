@@ -4,8 +4,6 @@ from googleapiclient.discovery import build
 from google_auth import get_credentials
 from config import GOOGLE_SHEETS_ID
 
-CATEGORIES = ["Medical", "Dental", "Vision", "Pharmacy", "Other"]
-
 
 def _get_or_create_sheet(service, title):
     spreadsheet = service.spreadsheets().get(spreadsheetId=GOOGLE_SHEETS_ID).execute()
@@ -22,28 +20,23 @@ def _get_or_create_sheet(service, title):
 def _read_receipts(service):
     result = service.spreadsheets().values().get(
         spreadsheetId=GOOGLE_SHEETS_ID,
-        range="Sheet1!A2:J",
+        range="Sheet1!A2:G",
     ).execute()
     return result.get("values", [])
 
 
-def _build_summaries(rows):
-    category_totals = defaultdict(float)
+def _build_monthly_table(rows):
     monthly_eligible = defaultdict(float)
-    cumulative = []
-    running_total = 0.0
 
     for row in rows:
         if len(row) < 7:
             continue
-        category = row[4] if len(row) > 4 else "Other"
-        receipt_date = row[2] if len(row) > 2 else ""
+        # 0=Receipt ID, 3=Receipt Date, 6=HSA Eligible Amount
+        receipt_date = row[3] if len(row) > 3 else ""
         try:
-            hsa = float(row[7]) if len(row) > 7 and row[7] else 0.0
+            hsa = float(row[6]) if len(row) > 6 and row[6] else 0.0
         except (ValueError, TypeError):
             hsa = 0.0
-
-        category_totals[category if category in CATEGORIES else "Other"] += hsa
 
         if receipt_date:
             try:
@@ -52,10 +45,14 @@ def _build_summaries(rows):
             except ValueError:
                 pass
 
-        running_total += hsa
-        cumulative.append([row[0] if row else "", round(running_total, 2)])
-
-    return category_totals, monthly_eligible, cumulative
+    table = [["Month", "HSA Eligible ($)"]] + [
+        [m, round(v, 2)]
+        for m, v in sorted(
+            monthly_eligible.items(),
+            key=lambda x: datetime.strptime(x[0], "%b %Y"),
+        )
+    ]
+    return table
 
 
 def _delete_existing_charts(service, sheet_id):
@@ -71,70 +68,43 @@ def _delete_existing_charts(service, sheet_id):
                 ).execute()
 
 
-def _chart_request(sheet_id, chart_type, title, data_range, anchor_col, anchor_row):
-    series_range = {
-        "sheetId": sheet_id,
-        "startRowIndex": data_range[0],
-        "endRowIndex": data_range[1],
-        "startColumnIndex": data_range[2] + 1,
-        "endColumnIndex": data_range[2] + 2,
-    }
+def _column_chart_request(sheet_id, n_rows):
     domain_range = {
         "sheetId": sheet_id,
-        "startRowIndex": data_range[0],
-        "endRowIndex": data_range[1],
-        "startColumnIndex": data_range[2],
-        "endColumnIndex": data_range[2] + 1,
+        "startRowIndex": 0,
+        "endRowIndex": n_rows,
+        "startColumnIndex": 0,
+        "endColumnIndex": 1,
     }
-
-    if chart_type == "PIE":
-        spec = {
-            "title": title,
-            "pieChart": {
-                "legendPosition": "RIGHT_LEGEND",
-                "domain": {"sourceRange": {"sources": [domain_range]}},
-                "series": {"sourceRange": {"sources": [series_range]}},
-            },
-        }
-    elif chart_type == "COLUMN":
-        spec = {
-            "title": title,
-            "basicChart": {
-                "chartType": "COLUMN",
-                "legendPosition": "BOTTOM_LEGEND",
-                "axis": [
-                    {"position": "BOTTOM_AXIS", "title": "Month"},
-                    {"position": "LEFT_AXIS", "title": "USD ($)"},
-                ],
-                "domains": [{"domain": {"sourceRange": {"sources": [domain_range]}}}],
-                "series": [{"series": {"sourceRange": {"sources": [series_range]}}}],
-            },
-        }
-    else:  # LINE
-        spec = {
-            "title": title,
-            "basicChart": {
-                "chartType": "LINE",
-                "legendPosition": "BOTTOM_LEGEND",
-                "axis": [
-                    {"position": "BOTTOM_AXIS", "title": "Date"},
-                    {"position": "LEFT_AXIS", "title": "Cumulative ($)"},
-                ],
-                "domains": [{"domain": {"sourceRange": {"sources": [domain_range]}}}],
-                "series": [{"series": {"sourceRange": {"sources": [series_range]}}}],
-            },
-        }
-
+    series_range = {
+        "sheetId": sheet_id,
+        "startRowIndex": 0,
+        "endRowIndex": n_rows,
+        "startColumnIndex": 1,
+        "endColumnIndex": 2,
+    }
     return {
         "addChart": {
             "chart": {
-                "spec": spec,
+                "spec": {
+                    "title": "Monthly HSA Eligible Spending",
+                    "basicChart": {
+                        "chartType": "COLUMN",
+                        "legendPosition": "BOTTOM_LEGEND",
+                        "axis": [
+                            {"position": "BOTTOM_AXIS", "title": "Month"},
+                            {"position": "LEFT_AXIS", "title": "USD ($)"},
+                        ],
+                        "domains": [{"domain": {"sourceRange": {"sources": [domain_range]}}}],
+                        "series": [{"series": {"sourceRange": {"sources": [series_range]}}}],
+                    },
+                },
                 "position": {
                     "overlayPosition": {
                         "anchorCell": {
                             "sheetId": sheet_id,
-                            "rowIndex": anchor_row,
-                            "columnIndex": anchor_col,
+                            "rowIndex": 0,
+                            "columnIndex": 3,
                         },
                         "widthPixels": 480,
                         "heightPixels": 300,
@@ -151,46 +121,27 @@ def update_dashboard():
     sheet_id = _get_or_create_sheet(service, "Dashboard")
 
     rows = _read_receipts(service)
-    category_totals, monthly_eligible, cumulative = _build_summaries(rows)
+    monthly_table = _build_monthly_table(rows)
 
-    # --- Write summary tables ---
-    # Table 1: Category (A1) — used by pie chart
-    cat_table = [["Category", "HSA Eligible ($)"]] + [
-        [c, round(category_totals.get(c, 0.0), 2)] for c in CATEGORIES
-    ]
-    # Table 2: Monthly (D1) — used by bar chart
-    monthly_table = [["Month", "HSA Eligible ($)"]] + [
-        [m, round(v, 2)] for m, v in sorted(monthly_eligible.items(),
-        key=lambda x: datetime.strptime(x[0], "%b %Y"))
-    ]
-    # Table 3: Cumulative (G1) — used by line chart
-    cumulative_table = [["Date Processed", "Cumulative HSA ($)"]] + cumulative
-
+    # Clear and rewrite the monthly table starting at A1
     service.spreadsheets().values().clear(
         spreadsheetId=GOOGLE_SHEETS_ID, range="Dashboard!A1:Z1000"
     ).execute()
 
-    for range_start, table in [("Dashboard!A1", cat_table), ("Dashboard!D1", monthly_table), ("Dashboard!G1", cumulative_table)]:
-        service.spreadsheets().values().update(
-            spreadsheetId=GOOGLE_SHEETS_ID,
-            range=range_start,
-            valueInputOption="USER_ENTERED",
-            body={"values": table},
-        ).execute()
+    service.spreadsheets().values().update(
+        spreadsheetId=GOOGLE_SHEETS_ID,
+        range="Dashboard!A1",
+        valueInputOption="USER_ENTERED",
+        body={"values": monthly_table},
+    ).execute()
 
-    # --- Recreate charts ---
+    # Recreate the single bar chart
     _delete_existing_charts(service, sheet_id)
 
-    n_monthly = max(len(monthly_table), 2)
-    n_cumulative = max(len(cumulative_table), 2)
-
-    requests = [
-        _chart_request(sheet_id, "PIE",    "Spending by Category",          [1, 7, 0],          0, 8),
-        _chart_request(sheet_id, "COLUMN", "Monthly HSA Eligible Spending",  [1, n_monthly, 3],  5, 8),
-        _chart_request(sheet_id, "LINE",   "Cumulative HSA Withdrawable",    [1, n_cumulative, 6], 10, 8),
-    ]
+    n_rows = max(len(monthly_table), 2)
     service.spreadsheets().batchUpdate(
-        spreadsheetId=GOOGLE_SHEETS_ID, body={"requests": requests}
+        spreadsheetId=GOOGLE_SHEETS_ID,
+        body={"requests": [_column_chart_request(sheet_id, n_rows)]},
     ).execute()
 
     print("  Dashboard updated.")

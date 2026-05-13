@@ -55,13 +55,9 @@ Return ONLY valid JSON with these fields:
 {
   "receipt_date": "YYYY-MM-DD or empty string if not found",
   "merchant": "store or provider name",
-  "category": "one of: Medical, Dental, Vision, Pharmacy, Other",
-  "items": "comma-separated list of all purchased items or services",
   "total": "total amount charged as numeric string, e.g. 27.00",
-  "hsa_eligible_amount": "sum of only IRS-eligible items as numeric string",
-  "hsa_eligible_items": "comma-separated list of only the eligible line items",
-  "hsa_ineligible_items": "comma-separated list of items that are NOT HSA eligible",
-  "notes": "prescription numbers, patient name, or any eligibility flags worth noting"
+  "hsa_eligible_amount": "sum of only IRS-eligible items as numeric string, e.g. 18.50",
+  "notes": "brief explanation of any items excluded from HSA eligibility, or empty string"
 }
 
 If a field cannot be determined from the image, use an empty string."""
