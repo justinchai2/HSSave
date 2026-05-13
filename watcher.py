@@ -7,6 +7,7 @@ import discord
 from discord import app_commands
 from config import DISCORD_BOT_TOKEN, DISCORD_CHANNEL_NAME, SUPPORTED_EXTENSIONS
 from usage_tracker import get_monthly_summary
+from hsa_chat import answer_hsa_question
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -37,6 +38,28 @@ async def on_ready():
 async def on_message(message):
     if message.author.bot:
         return
+
+    # --- HSA chat: respond to @mentions anywhere the bot can see ---
+    if client.user in message.mentions and not message.attachments:
+        question = message.content.replace(f"<@{client.user.id}>", "").strip()
+        if not question:
+            await message.reply(
+                "Hey! Ask me anything about HSA rules, eligible expenses, prescriptions, or contribution limits."
+            )
+            return
+
+        await message.add_reaction("⏳")
+        try:
+            answer = await asyncio.get_event_loop().run_in_executor(
+                None, answer_hsa_question, question
+            )
+            await message.remove_reaction("⏳", client.user)
+            await message.reply(answer)
+        except Exception as e:
+            await message.remove_reaction("⏳", client.user)
+            await message.reply(f"Sorry, I couldn't process that question: {e}")
+        return
+
     if message.channel.name != DISCORD_CHANNEL_NAME:
         return
     if not message.attachments:
