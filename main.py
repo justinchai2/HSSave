@@ -5,8 +5,8 @@ from dashboard import update_dashboard
 from watcher import start_watching
 
 
-def process_receipt(image_path: str, original_filename: str) -> dict:
-    print(f"\nProcessing receipt: {original_filename}")
+def process_receipt(image_path: str, original_filename: str, submitted_by: str = "") -> dict:
+    print(f"\nProcessing receipt: {original_filename} (from {submitted_by})")
 
     parsed = parse_receipt(image_path)
     drive_file_id, drive_url = upload_receipt(
@@ -14,7 +14,7 @@ def process_receipt(image_path: str, original_filename: str) -> dict:
         receipt_date=parsed.get("receipt_date", "unknown-date"),
         merchant=parsed.get("merchant", "unknown-merchant"),
     )
-    append_receipt_row(parsed, drive_url, original_filename)
+    append_receipt_row(parsed, drive_url, original_filename, submitted_by)
     parsed["drive_url"] = drive_url
     parsed["drive_file_id"] = drive_file_id
     update_dashboard()

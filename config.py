@@ -13,6 +13,7 @@ SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".heic", ".webp"}
 
 SHEETS_HEADERS = [
     "Date Processed",
+    "Submitted By",
     "Receipt Date",
     "Merchant",
     "Category",

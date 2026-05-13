@@ -36,10 +36,10 @@ def _build_summaries(rows):
     for row in rows:
         if len(row) < 7:
             continue
-        category = row[3] if len(row) > 3 else "Other"
-        receipt_date = row[1] if len(row) > 1 else ""
+        category = row[4] if len(row) > 4 else "Other"
+        receipt_date = row[2] if len(row) > 2 else ""
         try:
-            hsa = float(row[6]) if row[6] else 0.0
+            hsa = float(row[7]) if len(row) > 7 and row[7] else 0.0
         except (ValueError, TypeError):
             hsa = 0.0
 

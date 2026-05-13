@@ -53,8 +53,9 @@ async def on_message(message):
             tmp_path = tmp.name
 
         try:
+            submitted_by = message.author.display_name
             result = await asyncio.get_event_loop().run_in_executor(
-                None, _process_fn, tmp_path, attachment.filename
+                None, _process_fn, tmp_path, attachment.filename, submitted_by
             )
             await message.remove_reaction("⏳", client.user)
             await message.add_reaction("✅")

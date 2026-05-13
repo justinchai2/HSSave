@@ -7,7 +7,7 @@ from config import GOOGLE_SHEETS_ID, SHEETS_HEADERS
 def _ensure_headers(service):
     result = service.spreadsheets().values().get(
         spreadsheetId=GOOGLE_SHEETS_ID,
-        range="Sheet1!A1:L1",
+        range="Sheet1!A1:N1",
     ).execute()
     existing = result.get("values", [])
     if not existing or existing[0] != SHEETS_HEADERS:
@@ -19,8 +19,7 @@ def _ensure_headers(service):
         ).execute()
 
 
-def append_receipt_row(parsed: dict, drive_url: str, original_filename: str):
-    """Append one row to the Google Sheet for this receipt."""
+def append_receipt_row(parsed: dict, drive_url: str, original_filename: str, submitted_by: str = ""):
     creds = get_credentials()
     service = build("sheets", "v4", credentials=creds)
 
@@ -28,6 +27,7 @@ def append_receipt_row(parsed: dict, drive_url: str, original_filename: str):
 
     row = [
         datetime.now().strftime("%Y-%m-%d %H:%M"),
+        submitted_by,
         parsed.get("receipt_date", ""),
         parsed.get("merchant", ""),
         parsed.get("category", ""),
@@ -49,7 +49,7 @@ def append_receipt_row(parsed: dict, drive_url: str, original_filename: str):
         body={"values": [row]},
     ).execute()
 
-    print(f"  Logged to Sheets: {parsed.get('merchant')} — ${parsed.get('total')}")
+    print(f"  Logged to Sheets: {parsed.get('merchant')} — ${parsed.get('total')} (by {submitted_by})")
     _update_summary(service)
 
 
@@ -62,13 +62,13 @@ def delete_receipt_row(drive_url: str):
 
     result = service.spreadsheets().values().get(
         spreadsheetId=GOOGLE_SHEETS_ID,
-        range="Sheet1!A:L",
+        range="Sheet1!A:M",
     ).execute()
     rows = result.get("values", [])
 
     row_index = None
     for i, row in enumerate(rows):
-        if len(row) > 10 and row[10] == drive_url:
+        if len(row) > 11 and row[11] == drive_url:
             row_index = i
             break
 
@@ -85,16 +85,16 @@ def delete_receipt_row(drive_url: str):
             "endIndex": row_index + 1,
         }}}]},
     ).execute()
-    print(f"  Deleted row from Sheets.")
+    print("  Deleted row from Sheets.")
 
 
 def _update_summary(service):
     service.spreadsheets().values().update(
         spreadsheetId=GOOGLE_SHEETS_ID,
-        range="Sheet1!L1:M2",
+        range="Sheet1!M1:N2",
         valueInputOption="USER_ENTERED",
         body={"values": [
             ["Total HSA Withdrawable", ""],
-            ["=SUM(G2:G)", ""],
+            ["=SUM(H2:H)", ""],
         ]},
     ).execute()
