@@ -1,5 +1,4 @@
 from google import genai
-from google.genai import types
 from config import GEMINI_API_KEY
 from usage_tracker import record_usage
 
@@ -61,10 +60,7 @@ Guidelines for your responses:
 def answer_hsa_question(question: str) -> str:
     response = client.models.generate_content(
         model="gemini-2.5-flash",
-        contents=[
-            types.Part.from_text(SYSTEM_PROMPT),
-            types.Part.from_text(f"User question: {question}"),
-        ],
+        contents=[SYSTEM_PROMPT, f"User question: {question}"],
     )
 
     usage = response.usage_metadata
