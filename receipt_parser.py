@@ -85,6 +85,9 @@ def parse_receipt(image_path: str) -> dict:
             types.Part.from_bytes(data=image_data, mime_type=mime_type),
             PROMPT,
         ],
+        config=types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
+        ),
     )
 
     usage = response.usage_metadata

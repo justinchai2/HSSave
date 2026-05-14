@@ -1,4 +1,5 @@
 from google import genai
+from google.genai import types
 from config import GEMINI_API_KEY
 from usage_tracker import record_usage
 
@@ -61,6 +62,9 @@ def answer_hsa_question(question: str) -> str:
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=[SYSTEM_PROMPT, f"User question: {question}"],
+        config=types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
+        ),
     )
 
     usage = response.usage_metadata
